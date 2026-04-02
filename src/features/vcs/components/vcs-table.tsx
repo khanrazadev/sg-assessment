@@ -170,7 +170,7 @@ export function VcsTable() {
           </div>
           <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 w-full sm:w-auto">
             {ACTION_BUTTONS.map(({ label, dot }) => (
-              <Button key={label} variant="outline" className="h-7 px-2.5 text-[11px] font-medium bg-white text-gray-700 rounded border-gray-200">
+              <Button key={label} variant="outline" className="h-7 px-2.5 text-[5px] bg-white text-gray-700 rounded border-gray-200">
                 <span className={`w-2 h-2 rounded-[2px] mr-1.5 ${dot}`} />
                 {label}
               </Button>
