@@ -80,6 +80,11 @@ The line chart and bar chart are straightforward enough that Recharts handles th
 **Blast Radius graph layout**
 Nodes are positioned with a simple deterministic grid: fixed horizontal spacing between trust levels, and vertical positions calculated by centering siblings around `y = 0`. ReactFlow's `fitView` then frames the whole graph automatically. I considered a force-directed layout (like D3-force) for the graph but the DAG structure here is always left-to-right with clear layers, so a grid layout is actually more readable than a force layout would be.
 
+
+And if you want a quick tour ( i hate reading readme to)
+here’s quick a video.
+> Walkthrough video: https://www.loom.com/share/f48e788ab37e462e796ad006aa5d49a8
+
 ---
 
 ## What I'd do with more time
