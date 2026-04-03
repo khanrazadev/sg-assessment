@@ -23,15 +23,15 @@ export function LineChart() {
     <div className="h-[300px] w-full mt-4">
       <ResponsiveContainer width="100%" height="100%">
         <RechartsLineChart data={data} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+          <CartesianGrid vertical={false} stroke="#E5E7EB" />
           <XAxis
             dataKey="date"
             axisLine={false}
             tickLine={false}
-            padding={{ left: 20, right: 20 }}
+            padding={{ left: 70, right: 70 }}
             tick={{ fontSize: 12, fill: '#6B7280' }}
             dy={10}
-            label={{ value: 'Date', position: 'insideBottom', offset: -15, style: { fontSize: 13, fill: '#111827', fontWeight: 600 } }}
+            label={{ value: 'Date', position: 'insideBottom', offset: -20, style: { fontSize: 13, fill: '#111827', fontWeight: 600 } }}
           />
           <YAxis
             axisLine={false}
