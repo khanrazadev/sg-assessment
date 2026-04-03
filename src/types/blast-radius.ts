@@ -55,10 +55,24 @@ export interface CustomNodeData {
   label: string;
   sublabel?: string;
   type?: 'service' | 'auth' | 'org' | 'scope' | 'permission' | 'user' | 'workspace' | 'role';
-  isRisk?: boolean; // Highlight node if it represents a risk (e.g., full access)
+  isRisk?: boolean;
   icon?: string;
   details?: string[];
   score?: 'Low' | 'Medium' | 'High' | 'Critical';
+
+  // --- Hierarchy / expand-collapse contract ---
+  /** The node's own ID — passed so FlowNode can call onToggle without prop drilling */
+  id?: string;
+  /** True when this node has children in the graph */
+  hasChildren?: boolean;
+  /** Hierarchy depth: 1=auth root, 2=service, 3=scope/category, 4=permission */
+  level?: 1 | 2 | 3 | 4;
+  /** Parent node ID — used by canvas filtering logic */
+  parentId?: string;
+  /** Injected at render time by the canvas */
+  isExpanded?: boolean;
+  /** Injected at render time by the canvas */
+  onToggle?: (id: string) => void;
 }
 
 export type GraphNode = Node<CustomNodeData>;

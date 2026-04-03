@@ -1,152 +1,337 @@
-import { DetectorType, TransformedGraph, GraphNode, GraphEdge, SendgridRaw, PostmanRaw, OpenAIRaw } from "@/types/blast-radius";
+import {
+  DetectorType,
+  TransformedGraph,
+  GraphNode,
+  GraphEdge,
+  SendgridRaw,
+  PostmanRaw,
+  OpenAIRaw,
+} from "@/types/blast-radius";
 
 export const HORIZONTAL_SPACING = 350;
-export const VERTICAL_SPACING = 150;
+export const VERTICAL_SPACING = 160;
 
-// Generic helper to create a node
-const createNode = (id: string, label: string, x: number, y: number, props: any = {}): GraphNode => ({
-  id,
-  type: 'custom',
-  position: { x, y },
-  data: { label, ...props },
-});
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-// Generic helper to create an edge
+const createNode = (
+  id: string,
+  label: string,
+  x: number,
+  y: number,
+  props: Partial<GraphNode["data"]> & { parentId?: string } = {}
+): GraphNode => {
+  const { parentId, ...data } = props;
+  return {
+    id,
+    type: "custom",
+    position: { x, y },
+    data: {
+      label,
+      id,         // self-reference so FlowNode can call onToggle(id)
+      parentId,   // stored in data for canvas filtering
+      ...data,
+    },
+  };
+};
+
 const createEdge = (source: string, target: string, animated = false): GraphEdge => ({
   id: `e-${source}-${target}`,
   source,
   target,
-  type: 'smoothstep',
+  type: "smoothstep",
   animated,
-  style: { stroke: '#CBD5E1', strokeWidth: 2 },
+  style: { stroke: "#CBD5E1", strokeWidth: 2 },
 });
+
+// ---------------------------------------------------------------------------
+// SendGrid  —  4 levels:
+//   L1: root   (API Key / auth)
+//   L2: sg     (SendGrid service)
+//   L3: scope-* (Mail Send, Alerts, …)
+//   L4: perm-*  (mail.send, …)
+// ---------------------------------------------------------------------------
 
 export function transformSendgrid(data: SendgridRaw): TransformedGraph {
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
-  
-  let currentY = 0;
 
-  // Root Node (Service)
-  nodes.push(createNode('root', 'Sendgrid', 0, 0, { type: 'service', isRisk: false }));
+  // L1 — Auth key root
+  nodes.push(
+    createNode("root", data.key_type, 0, 0, {
+      type: "auth",
+      level: 1,
+      hasChildren: true,
+      score: data.key_type === "Full Access Key" ? "Critical" : "Medium",
+      isRisk: data.key_type === "Full Access Key",
+      sublabel: data["2fa_required"] ? "2FA enabled" : "2FA disabled",
+    })
+  );
 
-  // Key Node
-  const keyType = data.key_type;
-  const isFullAccess = keyType === 'Full Access Key';
-  nodes.push(createNode('key', keyType, HORIZONTAL_SPACING, 0, { type: 'auth', isRisk: isFullAccess, score: isFullAccess ? 'Critical' : 'Low' }));
-  edges.push(createEdge('root', 'key'));
+  // L2 — Service node
+  nodes.push(
+    createNode("sg", "SendGrid", HORIZONTAL_SPACING, 0, {
+      type: "service",
+      level: 2,
+      parentId: "root",
+      hasChildren: true,
+      sublabel: `${data.total_scopes} scopes · ${data.total_raw_scopes} raw`,
+    })
+  );
+  edges.push(createEdge("root", "sg"));
 
-  // Scopes Column
-  const scopesMap = new Map<string, { permissions: string[], subScopes: string[] }>();
-  
-  data.scopes.forEach(s => {
-    if (!scopesMap.has(s.scope)) {
-      scopesMap.set(s.scope, { permissions: new Set(), subScopes: new Set() } as any);
-    }
-    const mapEntry = scopesMap.get(s.scope)!;
-    s.permissions.forEach(p => (mapEntry.permissions as any as Set<string>).add(p));
-    if (s.sub_scope) {
-       (mapEntry.subScopes as any as Set<string>).add(s.sub_scope);
-    }
+  // Deduplicate scopes from data
+  const scopesMap = new Map<string, Set<string>>();
+  data.scopes.forEach((s) => {
+    if (!scopesMap.has(s.scope)) scopesMap.set(s.scope, new Set());
+    s.permissions.forEach((p) => scopesMap.get(s.scope)!.add(p));
   });
 
-  const uniqueScopes = Array.from(scopesMap.keys()).slice(0, 5); // Limit for visualization sanity
-  
-  uniqueScopes.forEach((scopeName, i) => {
-     const scopeId = `scope-${i}`;
-     const yPos = (i - Math.floor(uniqueScopes.length / 2)) * VERTICAL_SPACING;
-     
-     nodes.push(createNode(scopeId, scopeName, HORIZONTAL_SPACING * 2, yPos, { type: 'scope' }));
-     edges.push(createEdge('key', scopeId));
-     
-     // The raw output doesn't give deep tree beyond this cleanly for visualization unless we parse sub_scopes. Let's just create a Permission node.
-     const permId = `perm-${i}`;
-     const permissionsList = Array.from((scopesMap.get(scopeName)!.permissions as any as Set<string>)).slice(0, 3); // Max 3 perms to show
-     
-     const hasWrite = permissionsList.some(p => p.includes('create') || p.includes('update') || p.includes('delete') || p.includes('Write'));
-     
-     nodes.push(createNode(permId, hasWrite ? 'Read & Write' : 'Read', HORIZONTAL_SPACING * 3, yPos, { 
-        type: 'permission', 
-        details: permissionsList,
-        isRisk: hasWrite,
-        score: hasWrite ? 'High' : 'Low'
-     }));
-     edges.push(createEdge(scopeId, permId));
+  const uniqueScopes = Array.from(scopesMap.entries()).slice(0, 6);
+  const totalScopes = uniqueScopes.length;
+
+  uniqueScopes.forEach(([scopeName, permSet], i) => {
+    // L3 — Scope / category
+    const scopeId = `scope-${i}`;
+    const yPos = (i - Math.floor(totalScopes / 2)) * VERTICAL_SPACING;
+
+    nodes.push(
+      createNode(scopeId, scopeName, HORIZONTAL_SPACING * 2, yPos, {
+        type: "scope",
+        level: 3,
+        parentId: "sg",
+        hasChildren: true,
+      })
+    );
+    edges.push(createEdge("sg", scopeId));
+
+    // L4 — Permissions (max 5 per scope to keep graph readable)
+    const permissions = Array.from(permSet).slice(0, 5);
+    const hasWrite = permissions.some(
+      (p) =>
+        p.includes("create") ||
+        p.includes("update") ||
+        p.includes("delete") ||
+        p.toLowerCase().includes("write")
+    );
+
+    permissions.forEach((perm, j) => {
+      const permId = `perm-${i}-${j}`;
+      const permY = yPos + (j - Math.floor(permissions.length / 2)) * 80;
+
+      nodes.push(
+        createNode(permId, perm, HORIZONTAL_SPACING * 3, permY, {
+          type: "permission",
+          level: 4,
+          parentId: scopeId,
+          hasChildren: false,
+          isRisk: hasWrite,
+          score: hasWrite ? "High" : "Low",
+        })
+      );
+      edges.push(createEdge(scopeId, permId));
+    });
   });
 
   return { nodes, edges };
 }
+
+// ---------------------------------------------------------------------------
+// OpenAI  —  4 levels:
+//   L1: root   (API Key / auth)
+//   L2: openai (OpenAI service)
+//   L3: scope-* (endpoint groups)
+//   L4: perm-*  (individual endpoint + permission)
+// ---------------------------------------------------------------------------
 
 export function transformOpenAI(data: OpenAIRaw): TransformedGraph {
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
-  
-  nodes.push(createNode('root', 'OpenAI', 0, 0, { type: 'service' }));
-  
-  nodes.push(createNode('key', data.key_type, HORIZONTAL_SPACING, 0, { type: 'auth', sublabel: data.is_restricted ? 'Restricted' : 'Full Access' }));
-  edges.push(createEdge('root', 'key'));
 
-  if (data.organizations && data.organizations.length > 0) {
-     const org = data.organizations[0];
-     nodes.push(createNode('org', org.title || 'Organization', HORIZONTAL_SPACING * 2, 0, { type: 'org', sublabel: `Role: ${org.role}` }));
-     edges.push(createEdge('key', 'org'));
+  // L1 — Auth key root
+  nodes.push(
+    createNode("root", data.key_type, 0, 0, {
+      type: "auth",
+      level: 1,
+      hasChildren: true,
+      sublabel: data.is_restricted ? "Restricted Key" : "Full Access",
+      score: data.is_restricted ? "Medium" : "Critical",
+      isRisk: !data.is_restricted,
+    })
+  );
 
-     data.scopes.slice(0, 4).forEach((scope, i) => {
-        const yPos = (i - 1.5) * VERTICAL_SPACING;
-        const scopeId = `scope-${i}`;
-        const permId = `perm-${i}`;
+  // L2 — Service node
+  const org = data.organizations?.[0];
+  nodes.push(
+    createNode("openai", "OpenAI", HORIZONTAL_SPACING, 0, {
+      type: "service",
+      level: 2,
+      parentId: "root",
+      hasChildren: true,
+      sublabel: org ? `Org: ${org.title} · Role: ${org.role}` : undefined,
+    })
+  );
+  edges.push(createEdge("root", "openai"));
 
-        nodes.push(createNode(scopeId, scope.scope, HORIZONTAL_SPACING * 3, yPos, { type: 'scope', details: scope.endpoints.slice(0, 2) }));
-        edges.push(createEdge('org', scopeId));
+  const scopes = data.scopes.slice(0, 5);
+  const totalScopes = scopes.length;
 
-        nodes.push(createNode(permId, scope.permission, HORIZONTAL_SPACING * 4, yPos, { 
-           type: 'permission',
-           isRisk: scope.permission.includes('Write'),
-           score: scope.permission.includes('Write') ? 'High' : 'Low'
-        }));
-        edges.push(createEdge(scopeId, permId));
-     });
-  }
+  scopes.forEach((scope, i) => {
+    // L3 — Scope group
+    const scopeId = `scope-${i}`;
+    const yPos = (i - Math.floor(totalScopes / 2)) * VERTICAL_SPACING;
+
+    nodes.push(
+      createNode(scopeId, scope.scope, HORIZONTAL_SPACING * 2, yPos, {
+        type: "scope",
+        level: 3,
+        parentId: "openai",
+        hasChildren: true,
+        sublabel: scope.permission,
+      })
+    );
+    edges.push(createEdge("openai", scopeId));
+
+    // L4 — Individual endpoints as permissions
+    scope.endpoints.slice(0, 4).forEach((endpoint, j) => {
+      const permId = `perm-${i}-${j}`;
+      const permY = yPos + (j - Math.floor(scope.endpoints.length / 2)) * 70;
+      const hasWrite =
+        scope.permission.includes("Write") || scope.permission.includes("Read & Write");
+
+      nodes.push(
+        createNode(permId, endpoint, HORIZONTAL_SPACING * 3, permY, {
+          type: "permission",
+          level: 4,
+          parentId: scopeId,
+          hasChildren: false,
+          sublabel: scope.permission,
+          isRisk: hasWrite,
+          score: hasWrite ? "High" : "Low",
+        })
+      );
+      edges.push(createEdge(scopeId, permId));
+    });
+  });
 
   return { nodes, edges };
 }
+
+// ---------------------------------------------------------------------------
+// Postman  —  4 levels:
+//   L1: root       (API Key / auth)
+//   L2: postman    (Postman service)
+//   L3: role-*     (Team roles)
+//   L4: ws-*       (Workspaces)
+// ---------------------------------------------------------------------------
 
 export function transformPostman(data: PostmanRaw): TransformedGraph {
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
 
-  nodes.push(createNode('root', 'Postman', 0, 0, { type: 'service' }));
-  
   const user = data.user_info;
-  nodes.push(createNode('user', user.username || user.full_name, HORIZONTAL_SPACING, 0, { type: 'user', sublabel: user.email }));
-  edges.push(createEdge('root', 'user'));
 
-  if (data.roles && data.roles.length > 0) {
-      const role = data.roles[0];
-      nodes.push(createNode('role', role.scope, HORIZONTAL_SPACING * 2, 0, { type: 'role', details: [role.permissions] }));
-      edges.push(createEdge('user', 'role'));
+  // L1 — Auth root (user identity / API key)
+  nodes.push(
+    createNode("root", user.full_name || user.username, 0, 0, {
+      type: "auth",
+      level: 1,
+      hasChildren: true,
+      sublabel: user.email,
+      score: "Medium",
+    })
+  );
 
-      data.workspaces.slice(0, 3).forEach((ws, i) => {
-         const yPos = (i - 1) * VERTICAL_SPACING;
-         const wsId = `ws-${ws.id}`;
-         
-         nodes.push(createNode(wsId, ws.name, HORIZONTAL_SPACING * 3, yPos, { 
-            type: 'workspace', 
-            sublabel: `Type: ${ws.type}`,
-            isRisk: ws.visibility === 'public', // example risk
-            score: ws.visibility === 'public' ? 'Critical' : 'Medium'
-         }));
-         edges.push(createEdge('role', wsId));
-      });
-  }
+  // L2 — Service node
+  nodes.push(
+    createNode("postman", "Postman", HORIZONTAL_SPACING, 0, {
+      type: "service",
+      level: 2,
+      parentId: "root",
+      hasChildren: true,
+      sublabel: data.team_info?.name || "Personal",
+    })
+  );
+  edges.push(createEdge("root", "postman"));
+
+  const roles = data.roles.slice(0, 4);
+  const totalRoles = roles.length;
+
+  roles.forEach((role, i) => {
+    // L3 — Role / category
+    const roleId = `role-${i}`;
+    const yPos = (i - Math.floor(totalRoles / 2)) * VERTICAL_SPACING;
+    const isAdmin = role.scope === "admin" || role.permissions.toLowerCase().includes("all");
+
+    nodes.push(
+      createNode(roleId, role.scope, HORIZONTAL_SPACING * 2, yPos, {
+        type: "role",
+        level: 3,
+        parentId: "postman",
+        hasChildren: data.workspaces.length > 0,
+        sublabel: role.permissions.slice(0, 60) + (role.permissions.length > 60 ? "…" : ""),
+        isRisk: isAdmin,
+        score: isAdmin ? "Critical" : "Medium",
+      })
+    );
+    edges.push(createEdge("postman", roleId));
+
+    // L4 — Workspaces
+    data.workspaces.slice(0, 4).forEach((ws, j) => {
+      const wsId = `ws-${i}-${j}`;
+      const wsY = yPos + (j - Math.floor(data.workspaces.length / 2)) * 80;
+      const isPublic = ws.visibility === "public";
+
+      nodes.push(
+        createNode(wsId, ws.name, HORIZONTAL_SPACING * 3, wsY, {
+          type: "workspace",
+          level: 4,
+          parentId: roleId,
+          hasChildren: false,
+          sublabel: `${ws.type} · ${ws.visibility}`,
+          isRisk: isPublic,
+          score: isPublic ? "Critical" : "Low",
+        })
+      );
+      edges.push(createEdge(roleId, wsId));
+    });
+  });
 
   return { nodes, edges };
 }
 
-export function getBlastRadiusGraph(type: DetectorType, rawData: any): TransformedGraph {
-   if (type === 'sendgrid') return transformSendgrid(rawData as SendgridRaw);
-   if (type === 'openai') return transformOpenAI(rawData as OpenAIRaw);
-   if (type === 'postman') return transformPostman(rawData as PostmanRaw);
-   
-   return { nodes: [], edges: [] };
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
+export function getBlastRadiusGraph(type: DetectorType, rawData: unknown): TransformedGraph {
+  if (type === "sendgrid") return transformSendgrid(rawData as SendgridRaw);
+  if (type === "openai") return transformOpenAI(rawData as OpenAIRaw);
+  if (type === "postman") return transformPostman(rawData as PostmanRaw);
+  return { nodes: [], edges: [] };
+}
+
+// ---------------------------------------------------------------------------
+// Utility: collect all descendant IDs of a given node (for collapse-all)
+// ---------------------------------------------------------------------------
+
+export function collectDescendants(
+  nodeId: string,
+  allNodes: GraphNode[]
+): Set<string> {
+  const result = new Set<string>();
+  const queue = [nodeId];
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    allNodes.forEach((n) => {
+      if (n.data.parentId === current && !result.has(n.id)) {
+        result.add(n.id);
+        queue.push(n.id);
+      }
+    });
+  }
+
+  return result;
 }
