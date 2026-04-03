@@ -11,13 +11,13 @@ const navItems = [
   {
     name: 'Findings', href: '/vcs', icon: ClipboardList, subItems: [
       { name: 'VCS', href: '/vcs' },
-      { name: 'Cloud IAM', href: '/cloud-iam' },
-      { name: 'Cloud storage', href: '/cloud-storage' },
-      { name: 'Chat applications', href: '/chat-apps' },
-      { name: 'Directory services', href: '/directory-services' },
-      { name: 'DevOps tools', href: '/devops-tools' },
-      { name: 'Container registries', href: '/container-registries' },
-      { name: 'Other SaaS apps', href: '/other-saas' },
+      { name: 'Cloud IAM', href: '' },
+      { name: 'Cloud storage', href: '' },
+      { name: 'Chat applications', href: '' },
+      { name: 'Directory services', href: '' },
+      { name: 'DevOps tools', href: '' },
+      { name: 'Container registries', href: '' },
+      { name: 'Other SaaS apps', href: '' },
     ]
   },
   { name: 'Manage scans', href: '/scans', icon: Settings2 },
