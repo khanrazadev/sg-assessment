@@ -18,7 +18,6 @@ import { Category } from '@/types/vcs';
 
 const ALL_CATEGORIES: Category[] = ['Critical', 'High', 'Medium', 'Low'];
 
-// Number of filled bars per severity (3 bars total, like a signal indicator)
 const SEVERITY_BARS: Record<Category, number> = {
   Critical: 3,
   High: 2,
@@ -33,7 +32,7 @@ const SEVERITY_BG: Record<Category, string> = {
   Low:      'bg-[#b45309]',
 };
 
-// 3 rising bars — filled bars are white, unfilled are white/25
+
 function SeverityBars({ filled }: { filled: number }) {
   const bars = [4, 7, 10]; // heights in px, rising left to right
   return (
@@ -54,7 +53,7 @@ const ACTION_BUTTONS = [
   { label: 'Create ticket', dot: 'bg-green-500' },
   { label: 'Rotate',        dot: 'bg-blue-500' },
   { label: 'Move to vault', dot: 'bg-yellow-500' },
-  { label: 'Ignore',        dot: 'bg-gray-400' },
+  { label: 'Ignore', },
 ];
 
 export function VcsTable() {
@@ -86,7 +85,7 @@ export function VcsTable() {
           <div className="min-w-0">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-gray-900 flex items-center">
               <span className="truncate">Findings for VCS</span>
-              <Button variant="outline" size="icon" className="h-6 w-6 ml-2 text-gray-500 border-gray-200 rounded text-gray-400 hover:text-gray-900 shrink-0">
+              <Button variant="outline" size="icon" className="h-6 w-6 ml-2 text-gray-500 border-gray-200 rounded hover:text-gray-900 shrink-0">
                 <RefreshCw className="h-3.5 w-3.5" />
               </Button>
             </h1>
@@ -155,7 +154,7 @@ export function VcsTable() {
         </div>
       </div>
 
-      {/* Table Card */}
+      {/*...............................................Table Card...........................................................................*/}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
         {/* Action Bar */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-2 py-2 border-b border-gray-200 bg-white gap-2">

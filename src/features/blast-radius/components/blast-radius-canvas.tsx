@@ -27,9 +27,7 @@ const ID_TO_DETECTOR: Record<string, DetectorType> = {
   '3': 'openai',
 };
 
-// ---------------------------------------------------------------------------
 // Inner component (needs useSearchParams → must be inside Suspense)
-// ---------------------------------------------------------------------------
 
 function BlastRadiusCanvasInner() {
   const searchParams = useSearchParams();
@@ -42,9 +40,7 @@ function BlastRadiusCanvasInner() {
   // Set of expanded node IDs — root is expanded by default
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['root']));
 
-  // ------------------------------------------------------------------
-  // Raw graph (all nodes + all edges, no filtering)
-  // ------------------------------------------------------------------
+ 
   const rawGraph = useMemo(() => {
     if (activeDetector === 'sendgrid') return getBlastRadiusGraph('sendgrid', mockSendgrid);
     if (activeDetector === 'postman')  return getBlastRadiusGraph('postman',  mockPostman);
@@ -61,9 +57,7 @@ function BlastRadiusCanvasInner() {
     setActiveDetector(ID_TO_DETECTOR[id] ?? 'sendgrid');
   }, [id]);
 
-  // ------------------------------------------------------------------
   // toggleNode — expand adds id, collapse removes id + all descendants
-  // ------------------------------------------------------------------
   const toggleNode = useCallback(
     (nodeId: string) => {
       setExpandedNodes((prev) => {
@@ -126,9 +120,8 @@ function BlastRadiusCanvasInner() {
       }));
   }, [rawGraph.edges, visibleNodeIds]);
 
-  // ------------------------------------------------------------------
   // ReactFlow state (sync when visible sets change)
-  // ------------------------------------------------------------------
+  
   const [nodes, setNodes, onNodesChange] = useNodesState(visibleNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(visibleEdges);
 
@@ -251,9 +244,7 @@ function BlastRadiusCanvasInner() {
   );
 }
 
-// ---------------------------------------------------------------------------
 // Public export — wrapped in Suspense (required by useSearchParams / Next.js)
-// ---------------------------------------------------------------------------
 
 export function BlastRadiusCanvas() {
   return (
